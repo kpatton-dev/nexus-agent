@@ -1,0 +1,7 @@
+{
+  "dependencies": ["langchain_anthropic", "./src/nexus"],
+  "graphs": {
+    "nexus": "./src/nexus/graph.py:graph"
+  },
+  "env": "./.env"
+}

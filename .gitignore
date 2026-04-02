@@ -1,0 +1,25 @@
+# Environment
+.env
+.venv/
+venv/
+
+# Data
+chroma_data/
+response_cache/
+knowledge_base/manual_intake/
+knowledge_base/supplemental/
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
