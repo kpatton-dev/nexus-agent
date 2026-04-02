@@ -20,9 +20,10 @@ ISSUE_TYPE_TO_CONTENT = {
 }
 
 
-def ingest_jira_issues(max_results: int = 500) -> int:
+def ingest_jira_issues(max_pages: int = 10) -> int:
     """Fetch issues from Jira and ingest into vector store.
 
+    Uses the new POST /search/jql endpoint with token-based pagination.
     Returns total number of chunks ingested.
     """
     if not JIRA_URL or not JIRA_USERNAME or not JIRA_API_TOKEN:
@@ -30,21 +31,25 @@ def ingest_jira_issues(max_results: int = 500) -> int:
 
     store = get_vectorstore()
     total_chunks = 0
-    start = 0
+    total_issues = 0
     page_size = 50
+    next_page_token = None
 
     jql = f'project = "{JIRA_PROJECT_KEY}" ORDER BY updated DESC'
 
-    while start < max_results:
-        resp = httpx.get(
-            f"{JIRA_URL}/rest/api/3/search",
+    for page in range(max_pages):
+        body = {
+            "jql": jql,
+            "maxResults": page_size,
+            "fields": ["summary", "status", "priority", "issuetype", "description", "comment", "updated"],
+        }
+        if next_page_token:
+            body["nextPageToken"] = next_page_token
+
+        resp = httpx.post(
+            f"{JIRA_URL}/rest/api/2/search/jql",
             auth=(JIRA_USERNAME, JIRA_API_TOKEN),
-            params={
-                "jql": jql,
-                "maxResults": page_size,
-                "startAt": start,
-                "fields": "summary,status,priority,issuetype,description,comment,updated",
-            },
+            json=body,
             timeout=30,
         )
         resp.raise_for_status()
@@ -61,16 +66,14 @@ def ingest_jira_issues(max_results: int = 500) -> int:
             priority = fields.get("priority", {}).get("name", "Unknown")
             issue_type = fields.get("issuetype", {}).get("name", "Task")
 
-            # Extract description text from ADF or plain text
             description = _extract_adf_text(fields.get("description")) if fields.get("description") else ""
 
-            # Extract comments
             comments_text = ""
             comments_data = fields.get("comment", {}).get("comments", [])
             for comment in comments_data:
-                body = _extract_adf_text(comment.get("body"))
-                if body:
-                    comments_text += f"\n\n{body}"
+                body_text = _extract_adf_text(comment.get("body"))
+                if body_text:
+                    comments_text += f"\n\n{body_text}"
 
             doc_text = (
                 f"# {key}: {summary}\n\n"
@@ -98,10 +101,14 @@ def ingest_jira_issues(max_results: int = 500) -> int:
             store.add_texts(texts=documents, metadatas=metadatas, ids=ids)
             total_chunks += len(chunks)
 
-        logger.info("Ingested %d Jira issues (start=%d)", len(issues), start)
-        start += page_size
+        total_issues += len(issues)
+        logger.info("Ingested %d Jira issues (page %d, total %d)", len(issues), page + 1, total_issues)
 
-        if len(issues) < page_size:
+        # Token-based pagination
+        if data.get("isLast", True):
+            break
+        next_page_token = data.get("nextPageToken")
+        if not next_page_token:
             break
 
     return total_chunks

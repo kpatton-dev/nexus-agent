@@ -11,16 +11,16 @@ from nexus.config import JIRA_URL, JIRA_USERNAME, JIRA_API_TOKEN, JIRA_PROJECT_K
 logger = logging.getLogger(__name__)
 
 
-def _jira_get(endpoint: str, params: Optional[dict] = None) -> dict:
-    """Make authenticated GET request to Jira REST API."""
+def _jira_search(jql: str, fields: list[str], max_results: int = 10) -> dict:
+    """Search Jira issues using the new POST /search/jql endpoint."""
     if not JIRA_URL or not JIRA_USERNAME or not JIRA_API_TOKEN:
         raise ValueError("Jira credentials not configured")
 
-    url = f"{JIRA_URL}/rest/api/3/{endpoint}"
-    resp = httpx.get(
+    url = f"{JIRA_URL}/rest/api/2/search/jql"
+    resp = httpx.post(
         url,
         auth=(JIRA_USERNAME, JIRA_API_TOKEN),
-        params=params or {},
+        json={"jql": jql, "maxResults": max_results, "fields": fields},
         timeout=15,
     )
     resp.raise_for_status()
@@ -49,8 +49,7 @@ def query_jira_issues(
             jql_parts.append(f'status = "{status}"')
 
         jql = " AND ".join(jql_parts) + " ORDER BY updated DESC"
-        params = {"jql": jql, "maxResults": min(limit, 50), "fields": "summary,status,priority,issuetype,updated"}
-        data = _jira_get("search", params)
+        data = _jira_search(jql, ["summary", "status", "priority", "issuetype", "updated"], min(limit, 50))
         issues = data.get("issues", [])
 
         if not issues:
