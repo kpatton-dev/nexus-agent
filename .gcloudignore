@@ -1,0 +1,17 @@
+# Override .gitignore for Cloud Build — we need chroma_data and knowledge_base baked in
+.git
+.env
+.venv
+venv/
+__pycache__
+*.pyc
+*.egg-info
+dist/
+build/
+.idea/
+.vscode/
+*.swp
+.DS_Store
+tests/
+eval_results.json
+response_cache/

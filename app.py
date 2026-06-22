@@ -3,6 +3,9 @@
 Streamlit frontend for the NEXUS LangGraph agent system.
 """
 
+import hashlib
+import hmac
+import os
 import sys
 from pathlib import Path
 
@@ -23,6 +26,34 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+
+# ---------------------------------------------------------------------------
+# Auth gate — password from NEXUS_PASSWORD env var
+# ---------------------------------------------------------------------------
+def check_password() -> bool:
+    """Return True if the user has entered the correct password."""
+    expected = os.getenv("NEXUS_PASSWORD", "")
+    if not expected:
+        return True  # no password set — allow through (local dev)
+
+    if st.session_state.get("authenticated"):
+        return True
+
+    st.markdown("## 🔮 NEXUS")
+    st.caption("Multi-Agent IT Operations Intelligence")
+    password = st.text_input("Password", type="password", key="pw_input")
+    if st.button("Login", type="primary"):
+        if hmac.compare_digest(password, expected):
+            st.session_state.authenticated = True
+            st.rerun()
+        else:
+            st.error("Incorrect password.")
+    return False
+
+
+if not check_password():
+    st.stop()
 
 # ---------------------------------------------------------------------------
 # Custom CSS
